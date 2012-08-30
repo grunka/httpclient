@@ -10,6 +10,18 @@ import java.util.TreeMap;
 public class Parameters {
 	private final Map<String, List<String>> parameters = new TreeMap<String, List<String>>();
 
+	public Parameters() {}
+
+	public Parameters(Map<String, String> parameters) {
+		addAll(parameters);
+	}
+
+	public void addAll(Map<String, String> parameters) {
+		for (Map.Entry<String, String> entry : parameters.entrySet()) {
+			add(entry.getKey(), entry.getValue());
+		}
+	}
+
 	public Parameters add(String key, String value) {
 		List<String> values = parameters.get(key);
 		if (values == null) {

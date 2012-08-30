@@ -1,9 +1,11 @@
 package se.grunka.httpclient;
 
-import static org.junit.Assert.assertEquals;
+import java.util.HashMap;
 
 import org.junit.Before;
 import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 
 public class ParametersTest {
 
@@ -38,4 +40,12 @@ public class ParametersTest {
 		assertEquals("%C3%A5%C3%A4%C3%B6=a%3D%26b&%C3%A5%C3%A4%C3%B6=c%2Fd", parameters.toString());
 	}
 
+	@Test
+	public void shouldInitializeUsingMap() throws Exception {
+		HashMap<String, String> initializer = new HashMap<String, String>();
+		initializer.put("a", "A");
+		initializer.put("b", "B");
+		parameters = new Parameters(initializer);
+		assertEquals("a=A&b=B", parameters.toString());
+	}
 }
