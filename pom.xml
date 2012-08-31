@@ -3,13 +3,30 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-
-  <groupId>se.grunka</groupId>
+  <groupId>se.grunka.httpclient</groupId>
   <artifactId>httpclient</artifactId>
   <version>1.0</version>
   <name>HttpClient</name>
   <description>Simple HTTP client library on top of standard Java functionality</description>
   <url>http://github.com/grunka/httpclient</url>
+  <licenses>
+    <license>
+      <name>The Apache Software License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <scm>
+    <url>https://github.com/grunka/httpclient</url>
+    <connection>scm:git:git://github.com/grunka/httpclient</connection>
+  </scm>
+  <developers>
+    <developer>
+      <id>john</id>
+      <name>John Wästerlund</name>
+      <email>john@grunka.se</email>
+    </developer>
+  </developers>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
