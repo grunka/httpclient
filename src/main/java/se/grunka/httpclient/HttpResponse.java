@@ -3,6 +3,7 @@ package se.grunka.httpclient;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.MalformedURLException;
+import java.net.SocketTimeoutException;
 
 public class HttpResponse {
 	private final int code;
@@ -38,12 +39,16 @@ public class HttpResponse {
 		return cause != null;
 	}
 
+	public boolean timedOut() {
+		return cause instanceof SocketTimeoutException;
+	}
+
 	public boolean malformedUrl() {
 		return cause instanceof MalformedURLException;
 	}
 
-	public boolean readError() {
-		return cause instanceof IOException && !malformedUrl() && !couldNotConnect();
+	public boolean otherError() {
+		return cause instanceof IOException && !malformedUrl() && !couldNotConnect() && !timedOut();
 	}
 
 	public boolean couldNotConnect() {

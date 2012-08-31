@@ -9,16 +9,22 @@ import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.Charset;
 
 import com.google.gson.Gson;
 
 public class HttpClient {
+	private static final String TEXT_PLAIN = "text/plain";
+	private static final String FORM_URL_ENCODED = "application/x-www-form-urlencoded";
+	private static final String APPLICATION_JSON = "application/json";
+	private static final Charset UTF_8 = Charset.forName("UTF-8");
 	private final int connectTimeout;
 	private final int readTimeout;
 	private final Gson gson = new Gson();
-	private static final int MAX_BUFFER_SIZE = 4096;
+	private static final int BUFFER_SIZE = 4096;
 
 	public HttpClient(int connectTimeout, int readTimeout) {
 		this.connectTimeout = connectTimeout;
@@ -26,7 +32,7 @@ public class HttpClient {
 	}
 
 	public HttpResponse get(String path) {
-		return get(path, "text/plain");
+		return get(path, TEXT_PLAIN);
 	}
 
 	public HttpResponse get(String path, String accept) {
@@ -40,34 +46,23 @@ public class HttpClient {
 	}
 
 	public HttpResponse postJson(String path, Object value) {
-		return postJson(path, value, "application/json");
+		return postJson(path, value, APPLICATION_JSON);
 	}
 
 	public HttpResponse postJson(String path, Object value, String accept) {
-		byte[] content;
-		try {
-			content = gson.toJson(value).getBytes("UTF-8");
-		} catch (UnsupportedEncodingException e) {
-			throw new Error("UTF-8 not supported");
-		}
-		return postContent(path, "application/json", content, accept);
+		return postContent(path, APPLICATION_JSON, gson.toJson(value), accept);
 	}
 
 	public HttpResponse post(String path, Parameters parameters) {
-		return post(path, parameters, "text/plain");
+		return post(path, parameters, TEXT_PLAIN);
 	}
 
 	public HttpResponse post(String path, Parameters parameters, String accept) {
-		byte[] content;
-		try {
-			content = parameters.toString().getBytes("UTF-8");
-		} catch (UnsupportedEncodingException e) {
-			throw new Error("UTF-8 not supported", e);
-		}
-		return postContent(path, "application/x-www-form-urlencoded", content, accept);
+		return postContent(path, FORM_URL_ENCODED, parameters.toString(), accept);
 	}
 
-	private HttpResponse postContent(String path, String contentType, byte[] content, String accept) {
+	private HttpResponse postContent(String path, String contentType, String content, String accept) {
+		byte[] contentBytes = content.getBytes(UTF_8);
 		HttpURLConnection connection;
 		try {
 			connection = openConnection(path, accept);
@@ -81,16 +76,18 @@ public class HttpClient {
 		}
 		connection.setDoOutput(true);
 		connection.setRequestProperty("Content-Type", contentType);
-		connection.setRequestProperty("Content-Length", String.valueOf(content.length));
+		connection.setRequestProperty("Content-Length", String.valueOf(contentBytes.length));
 		try {
 			OutputStream outputStream = connection.getOutputStream();
 			try {
-				outputStream.write(content);
+				outputStream.write(contentBytes);
 			} finally {
 				outputStream.close();
 			}
 			return readResponse(connection);
 		} catch (ConnectException e) {
+			return new HttpResponse(e);
+		} catch (SocketTimeoutException e) {
 			return new HttpResponse(e);
 		} catch (IOException e) {
 			return readResponse(connection);
@@ -106,6 +103,8 @@ public class HttpClient {
 				inputStream.close();
 			}
 		} catch (ConnectException e) {
+			return new HttpResponse(e);
+		} catch (SocketTimeoutException e) {
 			return new HttpResponse(e);
 		} catch (IOException e) {
 			try {
@@ -124,7 +123,7 @@ public class HttpClient {
 
 	private String readAll(InputStream inputStream) throws IOException {
 		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-		byte[] buffer = new byte[MAX_BUFFER_SIZE];
+		byte[] buffer = new byte[BUFFER_SIZE];
 		int bytes;
 		while ((bytes = inputStream.read(buffer)) != -1) {
 			outputStream.write(buffer, 0, bytes);
