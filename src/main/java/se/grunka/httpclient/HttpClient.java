@@ -78,16 +78,11 @@ public class HttpClient {
 		connection.setRequestProperty("Content-Type", contentType);
 		connection.setRequestProperty("Content-Length", String.valueOf(contentBytes.length));
 		try {
-			OutputStream outputStream = connection.getOutputStream();
-			try {
+			try (OutputStream outputStream = connection.getOutputStream()) {
 				outputStream.write(contentBytes);
-			} finally {
-				outputStream.close();
 			}
 			return readResponse(connection);
-		} catch (ConnectException e) {
-			return new HttpResponse(e);
-		} catch (SocketTimeoutException e) {
+		} catch (ConnectException | SocketTimeoutException e) {
 			return new HttpResponse(e);
 		} catch (IOException e) {
 			return readResponse(connection);
@@ -96,24 +91,16 @@ public class HttpClient {
 
 	private HttpResponse readResponse(HttpURLConnection connection) {
 		try {
-			InputStream inputStream = connection.getInputStream();
-			try {
+			try (InputStream inputStream = connection.getInputStream()) {
 				return new HttpResponse(200, readAll(inputStream));
-			} finally {
-				inputStream.close();
 			}
-		} catch (ConnectException e) {
-			return new HttpResponse(e);
-		} catch (SocketTimeoutException e) {
+		} catch (ConnectException | SocketTimeoutException e) {
 			return new HttpResponse(e);
 		} catch (IOException e) {
 			try {
 				int responseCode = connection.getResponseCode();
-				InputStream errorStream = connection.getErrorStream();
-				try {
+				try (InputStream errorStream = connection.getErrorStream()) {
 					return new HttpResponse(responseCode, readAll(errorStream));
-				} finally {
-					errorStream.close();
 				}
 			} catch (IOException errorException) {
 				return new HttpResponse(errorException);
