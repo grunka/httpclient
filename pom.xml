@@ -36,7 +36,7 @@
         <repository>
             <id>github</id>
             <name>GitHub Grunka Apache Maven Packages</name>
-            <url>https://maven.pkg.github.com/grunka/httpclient</url>
+            <url>https://maven.pkg.github.com/grunka</url>
         </repository>
     </distributionManagement>
 
