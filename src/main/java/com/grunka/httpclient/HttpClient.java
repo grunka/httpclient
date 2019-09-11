@@ -1,10 +1,11 @@
 package com.grunka.httpclient;
 
+import com.google.gson.Gson;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
@@ -12,15 +13,13 @@ import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
-import com.google.gson.Gson;
-
+@SuppressWarnings("WeakerAccess")
 public class HttpClient {
 	private static final String TEXT_PLAIN = "text/plain";
 	private static final String FORM_URL_ENCODED = "application/x-www-form-urlencoded";
 	private static final String APPLICATION_JSON = "application/json";
-	private static final Charset UTF_8 = Charset.forName("UTF-8");
 	private final int connectTimeout;
 	private final int readTimeout;
 	private final Gson gson = new Gson();
@@ -62,7 +61,7 @@ public class HttpClient {
 	}
 
 	private HttpResponse postContent(String path, String contentType, String content, String accept) {
-		byte[] contentBytes = content.getBytes(UTF_8);
+		byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
 		HttpURLConnection connection;
 		try {
 			connection = openConnection(path, accept);
@@ -109,16 +108,13 @@ public class HttpClient {
 	}
 
 	private String readAll(InputStream inputStream) throws IOException {
-		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-		byte[] buffer = new byte[BUFFER_SIZE];
-		int bytes;
-		while ((bytes = inputStream.read(buffer)) != -1) {
-			outputStream.write(buffer, 0, bytes);
-		}
-		try {
-			return outputStream.toString("UTF-8");
-		} catch (UnsupportedEncodingException e) {
-			throw new Error("UTF-8 not supported", e);
+		try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+			byte[] buffer = new byte[BUFFER_SIZE];
+			int bytes;
+			while ((bytes = inputStream.read(buffer)) != -1) {
+				outputStream.write(buffer, 0, bytes);
+			}
+			return outputStream.toString(StandardCharsets.UTF_8);
 		}
 	}
 
