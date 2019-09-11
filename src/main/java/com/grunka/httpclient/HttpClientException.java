@@ -1,4 +1,4 @@
-package se.grunka.httpclient;
+package com.grunka.httpclient;
 
 class HttpClientException extends Exception {
 

@@ -1,4 +1,4 @@
-package se.grunka.httpclient;
+package com.grunka.httpclient;
 
 import java.util.HashMap;
 
