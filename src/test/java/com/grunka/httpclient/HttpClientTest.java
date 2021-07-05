@@ -1,18 +1,13 @@
 package com.grunka.httpclient;
 
-import com.google.gson.Gson;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.ProtocolException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.Map;
-import java.util.TreeMap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -33,7 +28,7 @@ public class HttpClientTest {
     private boolean requestStreamClosed;
 
     @Before
-    public void before() throws Exception {
+    public void before() {
         requestedUrl = null;
         //url = mock(URL.class);
         //connection = mock(HttpURLConnection.class);
@@ -116,7 +111,7 @@ public class HttpClientTest {
         assertTrue(responseStreamClosed);
     }
 
-    private void verifyPostConnectionProperties(String contentType, int length) throws ProtocolException {
+    private void verifyPostConnectionProperties(String contentType, int length) {
         //verify((HttpURLConnection) connection).setRequestMethod("POST");
         //verify(connection).setRequestProperty("Content-Type", contentType);
         //verify(connection).setRequestProperty("Content-Length", String.valueOf(length));
@@ -124,19 +119,19 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldSetBasicConnectionPropertiesForGet() throws Exception {
+    public void shouldSetBasicConnectionPropertiesForGet() {
         httpClient.get("http://example.com/", "what I accept");
         verifyBasicConnectionProperties("what I accept");
     }
 
     @Test
-    public void shouldSetBasicConnectionPropertiesForGetWithDefaultAccept() throws Exception {
+    public void shouldSetBasicConnectionPropertiesForGetWithDefaultAccept() {
         httpClient.get("http://example.com/");
         verifyBasicConnectionProperties("text/plain");
     }
 
     @Test
-    public void shouldSetBasicConnectionPropertiesForPost() throws Exception {
+    public void shouldSetBasicConnectionPropertiesForPost() {
         Parameters content = new Parameters().add("hello", "world");
         httpClient.post("http://example.com/", content, "what I accept");
         verifyBasicConnectionProperties("what I accept");
@@ -144,7 +139,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldSetBasicConnectionPropertiesForPostWithDefaultAccept() throws Exception {
+    public void shouldSetBasicConnectionPropertiesForPostWithDefaultAccept() {
         Parameters content = new Parameters().add("hello", "world");
         httpClient.post("http://example.com/", content);
         verifyBasicConnectionProperties("text/plain");
@@ -152,23 +147,23 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldSetBasicConnectionPropertiesForPostJson() throws Exception {
+    public void shouldSetBasicConnectionPropertiesForPostJson() {
         String content = "hello world";
         httpClient.postJson("http://example.com/", content, "what I accept");
         verifyBasicConnectionProperties("what I accept");
-        verifyPostConnectionProperties("application/json", new Gson().toJson(content).length());
+        verifyPostConnectionProperties("application/json", content.length());
     }
 
     @Test
-    public void shouldSetBasicConnectionPropertiesForPostJsonWithDefaultAccept() throws Exception {
+    public void shouldSetBasicConnectionPropertiesForPostJsonWithDefaultAccept() {
         String content = "hello world";
         httpClient.postJson("http://example.com/", content);
         verifyBasicConnectionProperties("application/json");
-        verifyPostConnectionProperties("application/json", new Gson().toJson(content).length());
+        verifyPostConnectionProperties("application/json", content.length());
     }
 
     @Test
-    public void shouldHandleMalformedUrl() throws Exception {
+    public void shouldHandleMalformedUrl() {
         //whenNew(URL.class).withArguments(anyString()).thenThrow(new MalformedURLException("that is no good"));
         HttpResponse result = httpClient.get("a really bad url");
         assertTrue(result.hasError());
@@ -176,7 +171,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldHandleMalformedUrlForPost() throws Exception {
+    public void shouldHandleMalformedUrlForPost() {
         //whenNew(URL.class).withArguments(anyString()).thenThrow(new MalformedURLException("that is no good"));
         HttpResponse result = httpClient.post("a really bad url", new Parameters());
         assertTrue(result.hasError());
@@ -184,7 +179,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldHandleProblemsOpeningConnection() throws Exception {
+    public void shouldHandleProblemsOpeningConnection() {
         //when(url.openConnection()).thenThrow(new IOException("this is really rare I guess but should still be handled"));
         HttpResponse result = httpClient.get("http://example.com/");
         assertTrue(result.hasError());
@@ -192,7 +187,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldHandleProblemsOpeningConnectionForPost() throws Exception {
+    public void shouldHandleProblemsOpeningConnectionForPost() {
         //when(url.openConnection()).thenThrow(new IOException("this is really rare I guess but should still be handled"));
         HttpResponse result = httpClient.post("http://example.com/", new Parameters());
         assertTrue(result.hasError());
@@ -200,7 +195,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldFailNonHttpUrlsGracefully() throws Exception {
+    public void shouldFailNonHttpUrlsGracefully() {
         //connection = mock(JarURLConnection.class);
         //when(url.openConnection()).thenReturn(connection);
         HttpResponse result = httpClient.get("jar://some_file.jar");
@@ -209,7 +204,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldHandleConnectFailureOnGets() throws Exception {
+    public void shouldHandleConnectFailureOnGets() {
         //when(connection.getInputStream()).thenThrow(new ConnectException("could not connect"));
         HttpResponse result = httpClient.get("http://example.com/");
         assertTrue(result.hasError());
@@ -217,7 +212,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldHandleConnectTimeoutOnGets() throws Exception {
+    public void shouldHandleConnectTimeoutOnGets() {
         //when(connection.getInputStream()).thenThrow(new SocketTimeoutException("timed out"));
         HttpResponse result = httpClient.get("http://example.com/");
         assertTrue(result.hasError());
@@ -225,7 +220,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldHandleReadTimeoutOnGets() throws Exception {
+    public void shouldHandleReadTimeoutOnGets() {
         InputStream inputStream = mockTimeoutInputStream();
         //when(connection.getInputStream()).thenReturn(inputStream);
         HttpResponse result = httpClient.get("http://example.com/");
@@ -234,7 +229,7 @@ public class HttpClientTest {
         //verify(inputStream).close();
     }
 
-    private InputStream mockTimeoutInputStream() throws IOException {
+    private InputStream mockTimeoutInputStream() {
         //InputStream inputStream = mock(InputStream.class);
         //when(inputStream.read()).thenThrow(new SocketTimeoutException());
         //when(inputStream.read(any(byte[].class))).thenThrow(new SocketTimeoutException());
@@ -243,7 +238,7 @@ public class HttpClientTest {
 		return null;
     }
 
-    private InputStream mockExceptionInputStream() throws IOException {
+    private InputStream mockExceptionInputStream() {
         //InputStream inputStream = mock(InputStream.class);
         //when(inputStream.read()).thenThrow(new IOException());
         //when(inputStream.read(any(byte[].class))).thenThrow(new IOException());
@@ -253,7 +248,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldReadNonOkResponse() throws Exception {
+    public void shouldReadNonOkResponse() {
         errorResponse = "error message";
         //when(connection.getInputStream()).thenThrow(new IOException("uh oh that request was bad"));
         //when(((HttpURLConnection) connection).getResponseCode()).thenReturn(123);
@@ -265,7 +260,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldHandleErrorOnReadNonOkResponse() throws Exception {
+    public void shouldHandleErrorOnReadNonOkResponse() {
         errorResponse = "error message";
         //when(connection.getInputStream()).thenThrow(new IOException("uh oh that request was bad"));
         InputStream errorStream = mockExceptionInputStream();
@@ -277,7 +272,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldHandleFailureToConnectOnPost() throws Exception {
+    public void shouldHandleFailureToConnectOnPost() {
         //when(connection.getOutputStream()).thenThrow(new ConnectException("could not connect to server"));
         //when(connection.getInputStream()).thenThrow(new Error("should not even try to get input stream"));
         HttpResponse result = httpClient.post("http://example.com", new Parameters());
@@ -286,7 +281,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldHandleConnectTimeoutOnPost() throws Exception {
+    public void shouldHandleConnectTimeoutOnPost() {
         //when(connection.getOutputStream()).thenThrow(new SocketTimeoutException("could not connect to server"));
         //when(connection.getInputStream()).thenThrow(new Error("should not even try to get input stream"));
         HttpResponse result = httpClient.post("http://example.com", new Parameters());
@@ -295,7 +290,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldReadErrorResponseOnErrorWhilePosting() throws Exception {
+    public void shouldReadErrorResponseOnErrorWhilePosting() {
         errorResponse = "error message";
         //when(connection.getOutputStream()).thenThrow(new IOException("not allowed to post"));
         //when(connection.getInputStream()).thenThrow(new IOException("not OK response"));
@@ -309,7 +304,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldGet() throws Exception {
+    public void shouldGet() {
         response = "get response";
         HttpResponse result = httpClient.get("http://localhost:7890/some/path");
         assertEquals("http://localhost:7890/some/path", requestedUrl);
@@ -319,7 +314,7 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldPost() throws Exception {
+    public void shouldPost() {
         response = "post response";
         HttpResponse result = httpClient.post("http://localhost:7890/some/path", new Parameters().add("hello", "world").add("one", "1"));
         assertEquals("http://localhost:7890/some/path", requestedUrl);
@@ -331,14 +326,11 @@ public class HttpClientTest {
     }
 
     @Test
-    public void shouldPostJsonContent() throws Exception {
+    public void shouldPostJsonContent() {
         response = "json post response";
-        Map<String, String> requestContent = new TreeMap<String, String>();
-        requestContent.put("1", "one");
-        requestContent.put("2", "two");
-        HttpResponse result = httpClient.postJson("http://example.com/post/json/", requestContent);
+        HttpResponse result = httpClient.postJson("http://example.com/post/json/", "requestContent");
         assertEquals("http://example.com/post/json/", requestedUrl);
-        assertEquals("{\"1\":\"one\",\"2\":\"two\"}", request);
+        assertEquals("requestContent", request);
         assertEquals(200, result.getCode());
         assertEquals("json post response", result.getContent());
         assertTrue(requestStreamClosed);
@@ -346,7 +338,7 @@ public class HttpClientTest {
     }
 
     @Test(expected = Error.class)
-    public void shouldFailHorriblyIfPostIsNotSupported() throws Exception {
+    public void shouldFailHorriblyIfPostIsNotSupported() {
         //doThrow(new ProtocolException()).when(((HttpURLConnection) connection)).setRequestMethod("POST");
         httpClient.post("http://example.com/", new Parameters());
     }
@@ -367,7 +359,7 @@ public class HttpClientTest {
         }
 
         @Override
-        public void connect() throws IOException {
+        public void connect() {
 
         }
     }

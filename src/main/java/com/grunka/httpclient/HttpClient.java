@@ -1,7 +1,5 @@
 package com.grunka.httpclient;
 
-import com.google.gson.Gson;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,7 +20,6 @@ public class HttpClient {
 	private static final String APPLICATION_JSON = "application/json";
 	private final int connectTimeout;
 	private final int readTimeout;
-	private final Gson gson = new Gson();
 	private static final int BUFFER_SIZE = 4096;
 
 	public HttpClient(int connectTimeout, int readTimeout) {
@@ -44,12 +41,12 @@ public class HttpClient {
 		return readResponse(connection);
 	}
 
-	public HttpResponse postJson(String path, Object value) {
+	public HttpResponse postJson(String path, String value) {
 		return postJson(path, value, APPLICATION_JSON);
 	}
 
-	public HttpResponse postJson(String path, Object value, String accept) {
-		return postContent(path, APPLICATION_JSON, gson.toJson(value), accept);
+	public HttpResponse postJson(String path, String value, String accept) {
+		return postContent(path, APPLICATION_JSON, value, accept);
 	}
 
 	public HttpResponse post(String path, Parameters parameters) {
