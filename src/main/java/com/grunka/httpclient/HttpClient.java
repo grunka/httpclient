@@ -22,6 +22,7 @@ public class HttpClient {
     private static final String TEXT_PLAIN = "text/plain";
     private static final String FORM_URL_ENCODED = "application/x-www-form-urlencoded";
     private static final String APPLICATION_JSON = "application/json";
+    private static final String CHARSET = "; charset=UTF-8";
     private final int connectTimeout;
     private final int readTimeout;
 
@@ -51,7 +52,7 @@ public class HttpClient {
     }
 
     public CompletableFuture<HttpResponse> post(String path, Parameters parameters) {
-        return post(path, parameters, TEXT_PLAIN);
+        return postContent(path, FORM_URL_ENCODED, parameters.toString(), TEXT_PLAIN);
     }
 
     public CompletableFuture<HttpResponse> post(String path, Parameters parameters, String accept) {
@@ -64,11 +65,11 @@ public class HttpClient {
             try {
                 connection.setRequestMethod("POST");
             } catch (ProtocolException e) {
-                throw new Error("POST method not supported", e);
+                return CompletableFuture.failedFuture(new Error("POST method not supported", e));
             }
             //TODO set content encoding?
             connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", contentType);
+            connection.setRequestProperty("Content-Type", contentType + CHARSET);
             connection.setRequestProperty("Content-Length", String.valueOf(contentBytes.length));
             return writeRequest(connection::getOutputStream, new ByteArrayInputStream(contentBytes)).thenCompose(x -> readResponse(connection))
                     .exceptionallyCompose(e -> {
