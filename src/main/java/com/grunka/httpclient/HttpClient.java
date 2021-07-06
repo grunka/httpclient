@@ -12,6 +12,7 @@ import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -26,6 +27,7 @@ public class HttpClient {
     private final int connectTimeout;
     private final int readTimeout;
 
+    //TODO want to be able to kill connections after X seconds based on url
     public HttpClient(int connectTimeout, int readTimeout) {
         this.connectTimeout = connectTimeout;
         this.readTimeout = readTimeout;
@@ -67,19 +69,22 @@ public class HttpClient {
             } catch (ProtocolException e) {
                 return CompletableFuture.failedFuture(new Error("POST method not supported", e));
             }
-            //TODO set content encoding?
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", contentType + CHARSET);
             connection.setRequestProperty("Content-Length", String.valueOf(contentBytes.length));
-            return writeRequest(connection::getOutputStream, new ByteArrayInputStream(contentBytes)).thenCompose(x -> readResponse(connection))
-                    .exceptionallyCompose(e -> {
+            return writeRequest(connection::getOutputStream, new ByteArrayInputStream(contentBytes))
+                    .thenCompose(x -> readResponse(connection))
+                    .<CompletableFuture<HttpResponse>>handle((r, e) -> {
+                        if (r != null) {
+                            return CompletableFuture.completedFuture(r);
+                        }
                         e = e.getClass() == CompletionException.class ? e.getCause() : e;
                         if (e.getClass() == ConnectException.class || e.getClass() == SocketTimeoutException.class) {
                             return CompletableFuture.failedFuture(e);
                         } else {
                             return readResponse(connection);
                         }
-                    });
+                    }).thenCompose(x -> x);
         });
     }
 
@@ -101,9 +106,12 @@ public class HttpClient {
     }
 
     private CompletableFuture<HttpResponse> readResponse(HttpURLConnection connection) {
-        return readAll(connection::getContentEncoding, connection::getInputStream)
+        return readAll(connection::getContentType, connection::getInputStream)
                 .thenApply(body -> new HttpResponse(200, body))
-                .exceptionallyCompose(e0 -> {
+                .<CompletableFuture<HttpResponse>>handle((response, e0) -> {
+                    if (response != null) {
+                        return CompletableFuture.completedFuture(response);
+                    }
                     e0 = e0.getClass() == CompletionException.class ? e0.getCause() : e0;
                     Class<? extends Throwable> exceptionClass = e0.getClass();
                     if (exceptionClass == ConnectException.class || exceptionClass == SocketTimeoutException.class) {
@@ -117,14 +125,17 @@ public class HttpClient {
                     }
                     return readAll(connection::getContentEncoding, connection::getErrorStream)
                             .thenApply(body -> new HttpResponse(responseCode, body))
-                            .exceptionallyCompose(e1 -> {
+                            .<CompletableFuture<HttpResponse>>handle((r, e1) -> {
+                                if (r != null) {
+                                    return CompletableFuture.completedFuture(r);
+                                }
                                 e1 = e1.getClass() == CompletionException.class ? e1.getCause() : e1;
                                 return CompletableFuture.failedFuture(e1);
-                            });
-                });
+                            }).thenCompose(x -> x);
+                }).thenCompose(x -> x);
     }
 
-    private interface ContentEncodingSupplier {
+    private interface ContentTypeSupplier {
         String get();
     }
 
@@ -132,14 +143,26 @@ public class HttpClient {
         InputStream get() throws IOException;
     }
 
-    private CompletableFuture<String> readAll(ContentEncodingSupplier contentEncodingSupplier, InputStreamSupplier inputStreamSupplier) {
+    public static void main(String[] args) {
+        HttpClient httpClient = new HttpClient(1000, 1000);
+        httpClient.get("https://www.google.com").thenAccept(response -> {
+            System.out.println("response.getBody() = " + response.getBody());
+        }).join();
+    }
+
+    private CompletableFuture<String> readAll(ContentTypeSupplier contentTypeSupplier, InputStreamSupplier inputStreamSupplier) {
         CompletableFuture<String> result = new CompletableFuture<>();
         ForkJoinPool.commonPool().execute(() -> {
-            String contentEncoding = contentEncodingSupplier.get(); //TODO use this when decoding stream
+            Charset charset = StandardCharsets.UTF_8;
+            String contentType = contentTypeSupplier.get();
+            if (contentType != null) {
+                contentType = contentType.toUpperCase();
+                //TODO do the parsing
+            }
             try (InputStream inputStream = inputStreamSupplier.get()) {
                 try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
                     inputStream.transferTo(outputStream);
-                    result.complete(outputStream.toString(StandardCharsets.UTF_8));
+                    result.complete(outputStream.toString(charset));
                 }
             } catch (IOException e) {
                 result.completeExceptionally(e);
