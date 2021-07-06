@@ -1,14 +1,14 @@
 package com.grunka.httpclient;
 
-import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
 public class Parameters {
-	private final Map<String, List<String>> parameters = new TreeMap<String, List<String>>();
+	private final Map<String, List<String>> parameters = new TreeMap<>();
 
 	public Parameters() {}
 
@@ -23,12 +23,7 @@ public class Parameters {
 	}
 
 	public Parameters add(String key, String value) {
-		List<String> values = parameters.get(key);
-		if (values == null) {
-			values = new ArrayList<String>();
-			parameters.put(key, values);
-		}
-		values.add(value);
+		parameters.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
 		return this;
 	}
 
@@ -48,10 +43,6 @@ public class Parameters {
 	}
 
 	private String encode(String value) {
-		try {
-			return URLEncoder.encode(value, "UTF-8");
-		} catch (UnsupportedEncodingException e) {
-			throw new Error("UTF-8 not supported", e);
-		}
+		return URLEncoder.encode(value, StandardCharsets.UTF_8);
 	}
 }
