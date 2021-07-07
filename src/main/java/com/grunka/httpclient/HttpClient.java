@@ -110,6 +110,7 @@ public class HttpClient {
                 contentBytes.transferTo(outputStream);
             } catch (IOException e) {
                 result.completeExceptionally(e);
+                return;
             }
             result.complete(null);
         });
