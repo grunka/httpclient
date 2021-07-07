@@ -14,6 +14,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.UnsupportedCharsetException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ForkJoinPool;
@@ -144,6 +145,7 @@ public class HttpClient {
     }
 
     public static void main(String[] args) {
+        parseCharsetFromContentType("thing/text;charset=utf-8;something", null);
         HttpClient httpClient = new HttpClient(1000, 1000);
         httpClient.get("https://www.google.com").thenAccept(response -> {
             System.out.println("response.getBody() = " + response.getBody());
@@ -153,12 +155,8 @@ public class HttpClient {
     private CompletableFuture<String> readAll(ContentTypeSupplier contentTypeSupplier, InputStreamSupplier inputStreamSupplier) {
         CompletableFuture<String> result = new CompletableFuture<>();
         ForkJoinPool.commonPool().execute(() -> {
-            Charset charset = StandardCharsets.UTF_8;
             String contentType = contentTypeSupplier.get();
-            if (contentType != null) {
-                contentType = contentType.toUpperCase();
-                //TODO do the parsing
-            }
+            Charset charset = parseCharsetFromContentType(contentType, StandardCharsets.UTF_8);
             try (InputStream inputStream = inputStreamSupplier.get()) {
                 try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
                     inputStream.transferTo(outputStream);
@@ -169,6 +167,27 @@ public class HttpClient {
             }
         });
         return result;
+    }
+
+    private static Charset parseCharsetFromContentType(String contentType, Charset defaultCharset) {
+        if (contentType == null) {
+            return defaultCharset;
+        }
+        String charsetString = contentType.toUpperCase();
+        int index = charsetString.indexOf("CHARSET=");
+        if (index != -1) {
+            charsetString = charsetString.substring(index + 8);
+            int nextSemicolon = charsetString.indexOf(";");
+            if (nextSemicolon != -1) {
+                charsetString = charsetString.substring(0, nextSemicolon);
+            }
+            charsetString = charsetString.trim();
+            try {
+                return Charset.forName(charsetString);
+            } catch (UnsupportedCharsetException ignore) {
+            }
+        }
+        return defaultCharset;
     }
 
     private CompletableFuture<HttpURLConnection> openConnection(String path, String accept) {
