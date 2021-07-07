@@ -144,14 +144,6 @@ public class HttpClient {
         InputStream get() throws IOException;
     }
 
-    public static void main(String[] args) {
-        parseCharsetFromContentType("thing/text;charset=utf-8;something", null);
-        HttpClient httpClient = new HttpClient(1000, 1000);
-        httpClient.get("https://www.google.com").thenAccept(response -> {
-            System.out.println("response.getBody() = " + response.getBody());
-        }).join();
-    }
-
     private CompletableFuture<String> readAll(ContentTypeSupplier contentTypeSupplier, InputStreamSupplier inputStreamSupplier) {
         CompletableFuture<String> result = new CompletableFuture<>();
         ForkJoinPool.commonPool().execute(() -> {
@@ -199,7 +191,7 @@ public class HttpClient {
         }
         return openConnection(url).thenApply(connection -> {
             connection.setRequestProperty("Connection", "Keep-Alive");
-            connection.setRequestProperty("User-Agent", "httpclient/1.0");
+            connection.setRequestProperty("User-Agent", "com.grunka.httpclient/1.0");
             connection.setRequestProperty("Accept", accept);
             connection.setUseCaches(false);
             connection.setInstanceFollowRedirects(true);
