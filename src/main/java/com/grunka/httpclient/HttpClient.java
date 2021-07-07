@@ -166,11 +166,11 @@ public class HttpClient {
         ForkJoinPool.commonPool().execute(() -> {
             String contentType = contentTypeSupplier.get();
             Charset charset = parseCharsetFromContentType(contentType, StandardCharsets.UTF_8);
-            try (InputStream inputStream = inputStreamSupplier.get()) {
-                try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+                try (InputStream inputStream = inputStreamSupplier.get()) {
                     inputStream.transferTo(outputStream);
-                    result.complete(outputStream.toString(charset));
                 }
+                result.complete(outputStream.toString(charset));
             } catch (IOException e) {
                 result.completeExceptionally(e);
             }
