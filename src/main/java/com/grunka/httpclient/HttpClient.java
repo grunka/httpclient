@@ -6,15 +6,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ConnectException;
+import java.net.CookieHandler;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ForkJoinPool;
@@ -27,11 +31,17 @@ public class HttpClient {
     private static final String CHARSET = "; charset=UTF-8";
     private final int connectTimeout;
     private final int readTimeout;
+    private final Map<String, Integer> domainKeepAliveMax;
 
     //TODO want to be able to kill connections after X seconds based on url
     public HttpClient(int connectTimeout, int readTimeout) {
+        this(connectTimeout, readTimeout, Map.of());
+    }
+
+    public HttpClient(int connectTimeout, int readTimeout, Map<String, Integer> domainKeepAliveMax) {
         this.connectTimeout = connectTimeout;
         this.readTimeout = readTimeout;
+        this.domainKeepAliveMax = domainKeepAliveMax;
     }
 
     public CompletableFuture<HttpResponse> get(String path) {
@@ -144,6 +154,13 @@ public class HttpClient {
         InputStream get() throws IOException;
     }
 
+    public static void main(String[] args) {
+        HttpClient httpClient = new HttpClient(1000, 1000);
+        httpClient.get("https://www.google.com").thenAccept(response -> {
+            System.out.println("response.getBody() = " + response.getBody());
+        }).join();
+    }
+
     private CompletableFuture<String> readAll(ContentTypeSupplier contentTypeSupplier, InputStreamSupplier inputStreamSupplier) {
         CompletableFuture<String> result = new CompletableFuture<>();
         ForkJoinPool.commonPool().execute(() -> {
@@ -205,6 +222,7 @@ public class HttpClient {
         CompletableFuture<HttpURLConnection> result = new CompletableFuture<>();
         ForkJoinPool.commonPool().execute(() -> {
             try {
+                CookieHandler.setDefault(new NullCookieHandler());
                 URLConnection connection = url.openConnection();
                 if (!(connection instanceof HttpURLConnection)) {
                     result.completeExceptionally(new MalformedURLException("Expected HttpURLConnection, got " + connection.getClass().getName()));
@@ -218,4 +236,15 @@ public class HttpClient {
         return result;
     }
 
+    private static class NullCookieHandler extends CookieHandler {
+        @Override
+        public Map<String, List<String>> get(URI uri, Map<String, List<String>> requestHeaders) throws IOException {
+            return Map.of();
+        }
+
+        @Override
+        public void put(URI uri, Map<String, List<String>> responseHeaders) throws IOException {
+
+        }
+    }
 }
