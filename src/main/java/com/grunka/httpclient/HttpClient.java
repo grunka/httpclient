@@ -153,6 +153,10 @@ public class HttpClient {
             Charset charset = parseCharsetFromContentType(contentType, request.charset);
             try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
                 try (InputStream inputStream = inputStreamSupplier.get()) {
+                    if (inputStream == null) {
+                        result.complete(null);
+                        return;
+                    }
                     inputStream.transferTo(outputStream);
                 }
                 result.complete(outputStream.toString(charset));
