@@ -33,7 +33,7 @@ public class HttpRequest {
     }
 
     private HttpRequest(HttpRequestType type, String url) {
-        this(type, url, 5000, 10_000, null, HttpClient.APPLICATION_JSON, StandardCharsets.UTF_8, false, null);
+        this(type, url, 5000, 10_000, HttpClient.ANY, HttpClient.APPLICATION_JSON, StandardCharsets.UTF_8, false, null);
     }
 
     public static HttpRequest GET(String url) {

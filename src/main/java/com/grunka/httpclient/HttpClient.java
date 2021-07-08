@@ -29,6 +29,7 @@ import java.util.concurrent.ForkJoinPool;
 @SuppressWarnings("WeakerAccess")
 public class HttpClient {
     public static final String TEXT_PLAIN = "text/plain";
+    public static final String ANY = "*/*";
     public static final String FORM_URL_ENCODED = "application/x-www-form-urlencoded";
     public static final String APPLICATION_JSON = "application/json";
 
@@ -198,9 +199,7 @@ public class HttpClient {
         return openConnection(url).thenApply(connection -> {
             connection.setRequestProperty("Connection", "Keep-Alive");
             connection.setRequestProperty("User-Agent", "com.grunka.httpclient/1.0");
-            if (request.accept != null) {
-                connection.setRequestProperty("Accept", request.accept);
-            }
+            connection.setRequestProperty("Accept", request.accept);
             connection.setUseCaches(false);
             connection.setInstanceFollowRedirects(true);
             connection.setConnectTimeout((int) request.connectTimeout);
