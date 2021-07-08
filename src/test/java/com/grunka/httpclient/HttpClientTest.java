@@ -93,6 +93,7 @@ public class HttpClientTest {
                                 }
                                 writer.println("HTTP/1.1 " + response.get("code"));
                                 writer.println("Content-Length: " + response.get("content").length());
+                                writer.println("Connection: keep-alive");
                                 writer.println();
                                 writer.print(response.get("content"));
                             }
