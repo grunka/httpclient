@@ -1,13 +1,25 @@
 package com.grunka.httpclient;
 
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLConnection;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.TreeMap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -15,352 +27,116 @@ import static org.junit.Assert.assertTrue;
 
 @Ignore
 public class HttpClientTest {
+    private static ServerSocket serverSocket;
+    private static int serverPort;
+    private static Thread serverThread;
+    private static final Map<String, List<String>> headers = new TreeMap<>(String::compareToIgnoreCase);
+    private static final Map<String, String> response = new HashMap<>();
+    private static final Map<String, String> request = new HashMap<>();
 
-    private HttpClient httpClient;
-    private String requestedUrl;
-    private URL url;
-    private String response;
-    private String request;
-    private String errorResponse;
-    private URLConnection connection;
-    private boolean errorResponseStreamClosed;
-    private boolean responseStreamClosed;
-    private boolean requestStreamClosed;
+    @BeforeClass
+    public static void beforeClass() {
+        Random random = new Random();
+        int attempts = 0;
+        while (true) {
+            try {
+                serverPort = random.nextInt(1024) + 1024;
+                System.out.println("Trying port " + serverPort);
+                serverSocket = new ServerSocket(serverPort);
+                break;
+            } catch (IOException e) {
+                if (attempts++ > 10) {
+                    throw new Error("Failed to open server socket", e);
+                }
+            }
+        }
+        serverThread = new Thread(() -> {
+            while (true) {
+                try {
+                    if (serverSocket.isClosed()) {
+                        break;
+                    }
+                    try (Socket socket = serverSocket.accept()) {
+                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+                            try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()))) {
+                                String in;
+                                while ((in = reader.readLine()).length() > 0) {
+                                    System.out.println(in);
+                                    int colon = in.indexOf(':');
+                                    if (colon != -1) {
+                                        String line = in;
+                                        headers.compute(line.substring(0, colon).trim(), (key, list) -> {
+                                            if (list == null) {
+                                                list = new ArrayList<>();
+                                            }
+                                            list.add(line.substring(colon + 1).trim());
+                                            return list;
+                                        });
+                                    } else {
+                                        if (in.startsWith("GET")) {
+                                            request.put("method", "GET");
+                                            request.put("path", in.split(" ")[1]);
+                                        }
+                                        if (in.startsWith("POST")) {
+                                            request.put("method", "POST");
+                                            request.put("path", in.split(" ")[1]);
+                                        }
+                                    }
+                                }
+                                writer.println("HTTP/1.1 " + response.get("code"));
+                                writer.println("Content-Length: " + response.get("content").length());
+                                writer.println();
+                                writer.print(response.get("content"));
+                            }
+                        }
+                    }
+                } catch (IOException e) {
+                    if (e instanceof SocketException && e.getMessage().contains("closed")) {
+                        System.out.println("Server socket closed");
+                    } else {
+                        System.err.println("Failed to read request");
+                        e.printStackTrace(System.err);
+                    }
+                }
+            }
+        }, "RequestAcceptor");
+        serverThread.start();
+    }
+
+    @AfterClass
+    public static void afterClass() throws Exception {
+        serverSocket.close();
+        serverThread.join();
+    }
 
     @Before
-    public void before() {
-        requestedUrl = null;
-        //url = mock(URL.class);
-        //connection = mock(HttpURLConnection.class);
-        //when(((HttpURLConnection) connection).getResponseCode()).thenReturn(200);
-        response = "";
-        responseStreamClosed = false;
-		/*
-		when(connection.getInputStream()).thenReturn(new InputStream() {
-			private int position = 0;
-			@Override
-			public int read() throws IOException {
-				if (position < response.length()) {
-					return response.charAt(position++);
-				} else {
-					return -1;
-				}
-			}
-
-			@Override
-			public void close() throws IOException {
-				responseStreamClosed = true;
-			}
-		});
-		*/
-        errorResponse = "";
-        errorResponseStreamClosed = false;
-		/*
-		when(((HttpURLConnection) connection).getErrorStream()).thenReturn(new InputStream() {
-			private int position = 0;
-
-			@Override
-			public int read() throws IOException {
-				if (position < errorResponse.length()) {
-					return errorResponse.charAt(position++);
-				} else {
-					return -1;
-				}
-			}
-
-			@Override
-			public void close() throws IOException {
-				errorResponseStreamClosed = true;
-			}
-		});
-		 */
-        request = "";
-        requestStreamClosed = false;
-		/*
-		when(connection.getOutputStream()).thenReturn(new OutputStream() {
-			@Override
-			public void write(int b) throws IOException {
-				request += Character.toString((char) b);
-			}
-
-			@Override
-			public void close() throws IOException {
-				requestStreamClosed = true;
-			}
-		});
-		 */
-        //when(url.openConnection()).thenReturn(connection);
-		/*
-		whenNew(URL.class).withArguments(anyString()).thenAnswer(new Answer<URL>() {
-			@Override
-			public URL answer(InvocationOnMock invocation) throws Throwable {
-				requestedUrl = (String) invocation.getArguments()[0];
-				return url;
-			}
-		});
-		 */
-        httpClient = new HttpClient(1234, 5678);
-    }
-
-    private void verifyBasicConnectionProperties(String accept) {
-        //verify(connection).setRequestProperty("Connection", "Keep-Alive");
-        //verify(connection).setRequestProperty("User-Agent", "httpclient/1.0");
-        //verify(connection).setRequestProperty("Accept", accept);
-        //verify(connection).setConnectTimeout(1234);
-        //verify(connection).setReadTimeout(5678);
-        assertTrue(responseStreamClosed);
-    }
-
-    private void verifyPostConnectionProperties(String contentType, int length) {
-        //verify((HttpURLConnection) connection).setRequestMethod("POST");
-        //verify(connection).setRequestProperty("Content-Type", contentType);
-        //verify(connection).setRequestProperty("Content-Length", String.valueOf(length));
-        assertTrue(requestStreamClosed);
+    public void setUp() {
+        request.clear();
+        response.clear();
+        response.put("code", "200 OK");
+        response.put("content", "");
     }
 
     @Test
-    public void shouldSetBasicConnectionPropertiesForGet() {
-        httpClient.get("http://example.com/", "what I accept");
-        verifyBasicConnectionProperties("what I accept");
+    public void shouldDoSimpleGet() {
+        response.put("content", "Hello World!");
+        HttpResponse response = HttpClient.execute(HttpRequest.GET("http://localhost:" + serverPort + "/hello")).join();
+        assertTrue(response.isOk());
+        assertEquals("Hello World!", response.getBody());
+        assertTrue(headers.get("user-agent").contains("com.grunka.httpclient/1.0"));
+        assertEquals("/hello", request.get("path"));
     }
 
     @Test
-    public void shouldSetBasicConnectionPropertiesForGetWithDefaultAccept() {
-        httpClient.get("http://example.com/");
-        verifyBasicConnectionProperties("text/plain");
+    public void shouldDoSimpleGetAndHandleError() {
+        response.put("code", "500 ERROR");
+        response.put("content", "Goodbye");
+        HttpResponse response = HttpClient.execute(HttpRequest.GET("http://localhost:" + serverPort + "/hello")).join();
+        assertFalse(response.isOk());
+        assertEquals("Goodbye", response.getBody());
+        assertTrue(headers.get("user-agent").contains("com.grunka.httpclient/1.0"));
+        assertEquals("/hello", request.get("path"));
     }
 
-    @Test
-    public void shouldSetBasicConnectionPropertiesForPost() {
-        Parameters content = new Parameters().add("hello", "world");
-        httpClient.post("http://example.com/", content, "what I accept");
-        verifyBasicConnectionProperties("what I accept");
-        verifyPostConnectionProperties("application/x-www-form-urlencoded", content.toString().length());
-    }
-
-    @Test
-    public void shouldSetBasicConnectionPropertiesForPostWithDefaultAccept() {
-        Parameters content = new Parameters().add("hello", "world");
-        httpClient.post("http://example.com/", content);
-        verifyBasicConnectionProperties("text/plain");
-        verifyPostConnectionProperties("application/x-www-form-urlencoded", content.toString().length());
-    }
-
-    @Test
-    public void shouldSetBasicConnectionPropertiesForPostJson() {
-        String content = "hello world";
-        httpClient.postJson("http://example.com/", content, "what I accept");
-        verifyBasicConnectionProperties("what I accept");
-        verifyPostConnectionProperties("application/json", content.length());
-    }
-
-    @Test
-    public void shouldSetBasicConnectionPropertiesForPostJsonWithDefaultAccept() {
-        String content = "hello world";
-        httpClient.postJson("http://example.com/", content);
-        verifyBasicConnectionProperties("application/json");
-        verifyPostConnectionProperties("application/json", content.length());
-    }
-
-    @Test
-    public void shouldHandleMalformedUrl() {
-        //whenNew(URL.class).withArguments(anyString()).thenThrow(new MalformedURLException("that is no good"));
-        HttpResponse result = httpClient.get("a really bad url");
-        assertTrue(result.hasError());
-        assertTrue(result.malformedUrl());
-    }
-
-    @Test
-    public void shouldHandleMalformedUrlForPost() {
-        //whenNew(URL.class).withArguments(anyString()).thenThrow(new MalformedURLException("that is no good"));
-        HttpResponse result = httpClient.post("a really bad url", new Parameters());
-        assertTrue(result.hasError());
-        assertTrue(result.malformedUrl());
-    }
-
-    @Test
-    public void shouldHandleProblemsOpeningConnection() {
-        //when(url.openConnection()).thenThrow(new IOException("this is really rare I guess but should still be handled"));
-        HttpResponse result = httpClient.get("http://example.com/");
-        assertTrue(result.hasError());
-        assertTrue(result.otherError());
-    }
-
-    @Test
-    public void shouldHandleProblemsOpeningConnectionForPost() {
-        //when(url.openConnection()).thenThrow(new IOException("this is really rare I guess but should still be handled"));
-        HttpResponse result = httpClient.post("http://example.com/", new Parameters());
-        assertTrue(result.hasError());
-        assertTrue(result.otherError());
-    }
-
-    @Test
-    public void shouldFailNonHttpUrlsGracefully() {
-        //connection = mock(JarURLConnection.class);
-        //when(url.openConnection()).thenReturn(connection);
-        HttpResponse result = httpClient.get("jar://some_file.jar");
-        assertTrue(result.hasError());
-        assertTrue(result.malformedUrl());
-    }
-
-    @Test
-    public void shouldHandleConnectFailureOnGets() {
-        //when(connection.getInputStream()).thenThrow(new ConnectException("could not connect"));
-        HttpResponse result = httpClient.get("http://example.com/");
-        assertTrue(result.hasError());
-        assertTrue(result.couldNotConnect());
-    }
-
-    @Test
-    public void shouldHandleConnectTimeoutOnGets() {
-        //when(connection.getInputStream()).thenThrow(new SocketTimeoutException("timed out"));
-        HttpResponse result = httpClient.get("http://example.com/");
-        assertTrue(result.hasError());
-        assertTrue(result.timedOut());
-    }
-
-    @Test
-    public void shouldHandleReadTimeoutOnGets() {
-        InputStream inputStream = mockTimeoutInputStream();
-        //when(connection.getInputStream()).thenReturn(inputStream);
-        HttpResponse result = httpClient.get("http://example.com/");
-        assertTrue(result.hasError());
-        assertTrue(result.timedOut());
-        //verify(inputStream).close();
-    }
-
-    private InputStream mockTimeoutInputStream() {
-        //InputStream inputStream = mock(InputStream.class);
-        //when(inputStream.read()).thenThrow(new SocketTimeoutException());
-        //when(inputStream.read(any(byte[].class))).thenThrow(new SocketTimeoutException());
-        //when(inputStream.read(any(byte[].class), anyInt(), anyInt())).thenThrow(new SocketTimeoutException());
-        //return inputStream;
-		return null;
-    }
-
-    private InputStream mockExceptionInputStream() {
-        //InputStream inputStream = mock(InputStream.class);
-        //when(inputStream.read()).thenThrow(new IOException());
-        //when(inputStream.read(any(byte[].class))).thenThrow(new IOException());
-        //when(inputStream.read(any(byte[].class), anyInt(), anyInt())).thenThrow(new IOException());
-        //return inputStream;
-		return null;
-    }
-
-    @Test
-    public void shouldReadNonOkResponse() {
-        errorResponse = "error message";
-        //when(connection.getInputStream()).thenThrow(new IOException("uh oh that request was bad"));
-        //when(((HttpURLConnection) connection).getResponseCode()).thenReturn(123);
-        HttpResponse result = httpClient.get("http://example.com/");
-        assertEquals(123, result.getCode());
-        assertEquals("error message", result.getContent());
-        assertFalse(result.hasError());
-        assertTrue(errorResponseStreamClosed);
-    }
-
-    @Test
-    public void shouldHandleErrorOnReadNonOkResponse() {
-        errorResponse = "error message";
-        //when(connection.getInputStream()).thenThrow(new IOException("uh oh that request was bad"));
-        InputStream errorStream = mockExceptionInputStream();
-        //when(((HttpURLConnection) connection).getErrorStream()).thenReturn(errorStream);
-        HttpResponse result = httpClient.get("http://example.com/");
-        assertTrue(result.hasError());
-        assertTrue(result.otherError());
-        //verify(errorStream).close();
-    }
-
-    @Test
-    public void shouldHandleFailureToConnectOnPost() {
-        //when(connection.getOutputStream()).thenThrow(new ConnectException("could not connect to server"));
-        //when(connection.getInputStream()).thenThrow(new Error("should not even try to get input stream"));
-        HttpResponse result = httpClient.post("http://example.com", new Parameters());
-        assertTrue(result.hasError());
-        assertTrue(result.couldNotConnect());
-    }
-
-    @Test
-    public void shouldHandleConnectTimeoutOnPost() {
-        //when(connection.getOutputStream()).thenThrow(new SocketTimeoutException("could not connect to server"));
-        //when(connection.getInputStream()).thenThrow(new Error("should not even try to get input stream"));
-        HttpResponse result = httpClient.post("http://example.com", new Parameters());
-        assertTrue(result.hasError());
-        assertTrue(result.timedOut());
-    }
-
-    @Test
-    public void shouldReadErrorResponseOnErrorWhilePosting() {
-        errorResponse = "error message";
-        //when(connection.getOutputStream()).thenThrow(new IOException("not allowed to post"));
-        //when(connection.getInputStream()).thenThrow(new IOException("not OK response"));
-        //Mockito.when(((HttpURLConnection) connection).getResponseCode()).thenReturn(400);
-        HttpResponse result = httpClient.post("http://example.com", new Parameters());
-        assertFalse(result.isOk());
-        assertFalse(result.hasError());
-        assertEquals(400, result.getCode());
-        assertEquals("error message", result.getContent());
-        assertTrue(errorResponseStreamClosed);
-    }
-
-    @Test
-    public void shouldGet() {
-        response = "get response";
-        HttpResponse result = httpClient.get("http://localhost:7890/some/path");
-        assertEquals("http://localhost:7890/some/path", requestedUrl);
-        assertEquals("", request);
-        assertEquals("get response", result.getContent());
-        assertTrue(responseStreamClosed);
-    }
-
-    @Test
-    public void shouldPost() {
-        response = "post response";
-        HttpResponse result = httpClient.post("http://localhost:7890/some/path", new Parameters().add("hello", "world").add("one", "1"));
-        assertEquals("http://localhost:7890/some/path", requestedUrl);
-        assertEquals("hello=world&one=1", request);
-        assertEquals(200, result.getCode());
-        assertEquals("post response", result.getContent());
-        assertTrue(requestStreamClosed);
-        assertTrue(responseStreamClosed);
-    }
-
-    @Test
-    public void shouldPostJsonContent() {
-        response = "json post response";
-        HttpResponse result = httpClient.postJson("http://example.com/post/json/", "requestContent");
-        assertEquals("http://example.com/post/json/", requestedUrl);
-        assertEquals("requestContent", request);
-        assertEquals(200, result.getCode());
-        assertEquals("json post response", result.getContent());
-        assertTrue(requestStreamClosed);
-        assertTrue(responseStreamClosed);
-    }
-
-    @Test(expected = Error.class)
-    public void shouldFailHorriblyIfPostIsNotSupported() {
-        //doThrow(new ProtocolException()).when(((HttpURLConnection) connection)).setRequestMethod("POST");
-        httpClient.post("http://example.com/", new Parameters());
-    }
-
-    private static class MockHttpURLConnection extends HttpURLConnection {
-        protected MockHttpURLConnection(URL u) {
-            super(u);
-        }
-
-        @Override
-        public void disconnect() {
-
-        }
-
-        @Override
-        public boolean usingProxy() {
-            return false;
-        }
-
-        @Override
-        public void connect() {
-
-        }
-    }
+    //TODO test errors, strange content, and timeouts of different kinds
 }
