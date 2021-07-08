@@ -99,7 +99,7 @@ public class HttpClientTest {
 			}
 		});
 		 */
-        httpClient = new HttpClient(1234, 5678);
+        //httpClient = new HttpClient(1234, 5678);
     }
 
     private void verifyBasicConnectionProperties(String accept) {
@@ -120,7 +120,7 @@ public class HttpClientTest {
 
     @Test
     public void shouldSetBasicConnectionPropertiesForGet() {
-        httpClient.get("http://example.com/", "what I accept");
+        httpClient.get("http://example.com/");
         verifyBasicConnectionProperties("what I accept");
     }
 
@@ -133,7 +133,7 @@ public class HttpClientTest {
     @Test
     public void shouldSetBasicConnectionPropertiesForPost() {
         Parameters content = new Parameters().add("hello", "world");
-        httpClient.post("http://example.com/", content, "what I accept");
+        httpClient.post("http://example.com/", content);
         verifyBasicConnectionProperties("what I accept");
         verifyPostConnectionProperties("application/x-www-form-urlencoded", content.toString().length());
     }
@@ -149,7 +149,7 @@ public class HttpClientTest {
     @Test
     public void shouldSetBasicConnectionPropertiesForPostJson() {
         String content = "hello world";
-        httpClient.postJson("http://example.com/", content, "what I accept");
+        httpClient.postJson("http://example.com/", content);
         verifyBasicConnectionProperties("what I accept");
         verifyPostConnectionProperties("application/json", content.length());
     }

@@ -25,66 +25,113 @@ import java.util.concurrent.ForkJoinPool;
 
 @SuppressWarnings("WeakerAccess")
 public class HttpClient {
-    private static final String TEXT_PLAIN = "text/plain";
-    private static final String FORM_URL_ENCODED = "application/x-www-form-urlencoded";
-    private static final String APPLICATION_JSON = "application/json";
-    private static final String CHARSET = "; charset=UTF-8";
-    private final int connectTimeout;
-    private final int readTimeout;
-    private final Map<String, Integer> domainKeepAliveMax;
+    public static final String TEXT_PLAIN = "text/plain";
+    public static final String FORM_URL_ENCODED = "application/x-www-form-urlencoded";
+    public static final String APPLICATION_JSON = "application/json";
 
-    //TODO want to be able to kill connections after X seconds based on url
-    public HttpClient(int connectTimeout, int readTimeout) {
-        this(connectTimeout, readTimeout, Map.of());
+    public static class Configuration {
+        public static final Configuration DEFAULT = new Configuration(5000, 10_000, null, APPLICATION_JSON, StandardCharsets.UTF_8, false);
+
+        public final long connectTimeout;
+        public final long readTimeout;
+        public final String accept;
+        public final String contentType;
+        public final Charset charset;
+        public final boolean disconnect;
+
+        public Configuration(long connectTimeout, long readTimeout, String accept, String contentType, Charset charset, boolean disconnect) {
+            this.connectTimeout = connectTimeout;
+            this.readTimeout = readTimeout;
+            this.accept = accept;
+            this.contentType = contentType;
+            this.charset = charset;
+            this.disconnect = disconnect;
+        }
+
+        public Configuration disconnect() {
+            if (disconnect) {
+                return this;
+            }
+            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, true);
+        }
+
+        public Configuration readTimeout(long readTimeout) {
+            if (readTimeout == this.readTimeout) {
+                return this;
+            }
+            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, disconnect);
+        }
+
+        public Configuration connectTimeout(long connectTimeout) {
+            if (connectTimeout == this.connectTimeout) {
+                return this;
+            }
+            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, disconnect);
+        }
+
+        public Configuration charset(Charset charset) {
+            if (Objects.equals(charset, this.charset)) {
+                return this;
+            }
+            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, disconnect);
+        }
+
+        public Configuration accept(String accept) {
+            if (Objects.equals(accept, this.accept)) {
+                return this;
+            }
+            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, disconnect);
+        }
+
+        public Configuration contentType(String contentType) {
+            Objects.requireNonNull(contentType, "Content-Type is not allowed to be null");
+            if (Objects.equals(contentType, this.contentType)) {
+                return this;
+            }
+            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, disconnect);
+        }
     }
 
-    public HttpClient(int connectTimeout, int readTimeout, Map<String, Integer> domainKeepAliveMax) {
-        this.connectTimeout = connectTimeout;
-        this.readTimeout = readTimeout;
-        this.domainKeepAliveMax = domainKeepAliveMax;
+    private HttpClient() {
     }
 
-    public CompletableFuture<HttpResponse> get(String path) {
-        return get(path, TEXT_PLAIN);
+    public static CompletableFuture<HttpResponse> get(String path) {
+        return get(path, Configuration.DEFAULT);
     }
 
-    public CompletableFuture<HttpResponse> getJson(String path) {
-        return get(path, APPLICATION_JSON);
+    public static CompletableFuture<HttpResponse> getJson(String path) {
+        return get(path, Configuration.DEFAULT.accept(APPLICATION_JSON));
     }
 
-    public CompletableFuture<HttpResponse> get(String path, String accept) {
-        return openConnection(path, accept).thenCompose(this::readResponse);
+    public static CompletableFuture<HttpResponse> get(String path, Configuration configuration) {
+        return openConnection(path, configuration).thenCompose(connection -> HttpClient.readResponse(connection, configuration));
     }
 
-    public CompletableFuture<HttpResponse> postJson(String path, String json) {
-        return postJson(path, json, APPLICATION_JSON);
+    public static CompletableFuture<HttpResponse> postJson(String path, String json) {
+        return postContent(path, json, Configuration.DEFAULT.contentType(APPLICATION_JSON).accept(APPLICATION_JSON));
     }
 
-    public CompletableFuture<HttpResponse> postJson(String path, String json, String accept) {
-        return postContent(path, APPLICATION_JSON, json, accept);
+    public static CompletableFuture<HttpResponse> post(String path, Parameters parameters) {
+        return post(path, parameters, Configuration.DEFAULT);
     }
 
-    public CompletableFuture<HttpResponse> post(String path, Parameters parameters) {
-        return postContent(path, FORM_URL_ENCODED, parameters.toString(), TEXT_PLAIN);
+    public static CompletableFuture<HttpResponse> post(String path, Parameters parameters, Configuration configuration) {
+        return postContent(path, parameters.toString(), configuration.contentType(FORM_URL_ENCODED));
     }
 
-    public CompletableFuture<HttpResponse> post(String path, Parameters parameters, String accept) {
-        return postContent(path, FORM_URL_ENCODED, parameters.toString(), accept);
-    }
-
-    private CompletableFuture<HttpResponse> postContent(String path, String contentType, String content, String accept) {
-        byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
-        return openConnection(path, accept).thenCompose(connection -> {
+    private static CompletableFuture<HttpResponse> postContent(String path, String content, Configuration configuration) {
+        byte[] contentBytes = content.getBytes(configuration.charset);
+        return openConnection(path, configuration).thenCompose(connection -> {
             try {
                 connection.setRequestMethod("POST");
             } catch (ProtocolException e) {
                 return CompletableFuture.failedFuture(new Error("POST method not supported", e));
             }
             connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", contentType + CHARSET);
+            connection.setRequestProperty("Content-Type", configuration.contentType + "; charset=" + configuration.charset.name());
             connection.setRequestProperty("Content-Length", String.valueOf(contentBytes.length));
             return writeRequest(connection::getOutputStream, new ByteArrayInputStream(contentBytes))
-                    .thenCompose(x -> readResponse(connection))
+                    .thenCompose(x -> readResponse(connection, configuration))
                     .<CompletableFuture<HttpResponse>>handle((r, e) -> {
                         if (r != null) {
                             return CompletableFuture.completedFuture(r);
@@ -93,7 +140,7 @@ public class HttpClient {
                         if (e.getClass() == ConnectException.class || e.getClass() == SocketTimeoutException.class) {
                             return CompletableFuture.failedFuture(e);
                         } else {
-                            return readResponse(connection);
+                            return readResponse(connection, configuration);
                         }
                     }).thenCompose(x -> x);
         });
@@ -103,7 +150,7 @@ public class HttpClient {
         OutputStream get() throws IOException;
     }
 
-    private CompletableFuture<Void> writeRequest(OutputStreamSupplier outputStreamSupplier, InputStream contentBytes) {
+    private static CompletableFuture<Void> writeRequest(OutputStreamSupplier outputStreamSupplier, InputStream contentBytes) {
         CompletableFuture<Void> result = new CompletableFuture<>();
         ForkJoinPool.commonPool().execute(() -> {
             try (OutputStream outputStream = outputStreamSupplier.get()) {
@@ -117,8 +164,8 @@ public class HttpClient {
         return result;
     }
 
-    private CompletableFuture<HttpResponse> readResponse(HttpURLConnection connection) {
-        return readAll(connection::getContentType, connection::getInputStream)
+    private static CompletableFuture<HttpResponse> readResponse(HttpURLConnection connection, Configuration configuration) {
+        return readAll(connection::getContentType, connection::getInputStream, configuration)
                 .thenApply(body -> new HttpResponse(200, body))
                 .<CompletableFuture<HttpResponse>>handle((response, e0) -> {
                     if (response != null) {
@@ -135,7 +182,7 @@ public class HttpClient {
                     } catch (IOException ioException) {
                         return CompletableFuture.failedFuture(ioException);
                     }
-                    return readAll(connection::getContentEncoding, connection::getErrorStream)
+                    return readAll(connection::getContentEncoding, connection::getErrorStream, configuration)
                             .thenApply(body -> new HttpResponse(responseCode, body))
                             .<CompletableFuture<HttpResponse>>handle((r, e1) -> {
                                 if (r != null) {
@@ -144,7 +191,13 @@ public class HttpClient {
                                 e1 = e1.getClass() == CompletionException.class ? e1.getCause() : e1;
                                 return CompletableFuture.failedFuture(e1);
                             }).thenCompose(x -> x);
-                }).thenCompose(x -> x);
+                })
+                .thenCompose(x -> x)
+                .whenComplete((r, t) -> {
+                    if (configuration.disconnect) {
+                        connection.disconnect();
+                    }
+                });
     }
 
     private interface ContentTypeSupplier {
@@ -162,11 +215,11 @@ public class HttpClient {
         }).join();
     }
 
-    private CompletableFuture<String> readAll(ContentTypeSupplier contentTypeSupplier, InputStreamSupplier inputStreamSupplier) {
+    private static CompletableFuture<String> readAll(ContentTypeSupplier contentTypeSupplier, InputStreamSupplier inputStreamSupplier, Configuration configuration) {
         CompletableFuture<String> result = new CompletableFuture<>();
         ForkJoinPool.commonPool().execute(() -> {
             String contentType = contentTypeSupplier.get();
-            Charset charset = parseCharsetFromContentType(contentType, StandardCharsets.UTF_8);
+            Charset charset = parseCharsetFromContentType(contentType, configuration.charset);
             try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
                 try (InputStream inputStream = inputStreamSupplier.get()) {
                     inputStream.transferTo(outputStream);
@@ -200,7 +253,7 @@ public class HttpClient {
         return defaultCharset;
     }
 
-    private CompletableFuture<HttpURLConnection> openConnection(String path, String accept) {
+    private static CompletableFuture<HttpURLConnection> openConnection(String path, Configuration configuration) {
         URL url;
         try {
             url = new URL(path);
@@ -210,20 +263,22 @@ public class HttpClient {
         return openConnection(url).thenApply(connection -> {
             connection.setRequestProperty("Connection", "Keep-Alive");
             connection.setRequestProperty("User-Agent", "com.grunka.httpclient/1.0");
-            connection.setRequestProperty("Accept", accept);
+            if (configuration.accept != null) {
+                connection.setRequestProperty("Accept", configuration.accept);
+            }
             connection.setUseCaches(false);
             connection.setInstanceFollowRedirects(true);
-            connection.setConnectTimeout(connectTimeout);
-            connection.setReadTimeout(readTimeout);
+            connection.setConnectTimeout((int) configuration.connectTimeout);
+            connection.setReadTimeout((int) configuration.readTimeout);
             return connection;
         });
     }
 
-    private CompletableFuture<HttpURLConnection> openConnection(URL url) {
+    private static CompletableFuture<HttpURLConnection> openConnection(URL url) {
         CompletableFuture<HttpURLConnection> result = new CompletableFuture<>();
         ForkJoinPool.commonPool().execute(() -> {
             try {
-                CookieHandler.setDefault(new NullCookieHandler());
+                CookieHandler.setDefault(NullCookieHandler.INSTANCE);
                 URLConnection connection = url.openConnection();
                 if (!(connection instanceof HttpURLConnection)) {
                     result.completeExceptionally(new MalformedURLException("Expected HttpURLConnection, got " + connection.getClass().getName()));
@@ -238,6 +293,8 @@ public class HttpClient {
     }
 
     private static class NullCookieHandler extends CookieHandler {
+        public static final NullCookieHandler INSTANCE = new NullCookieHandler();
+
         @Override
         public Map<String, List<String>> get(URI uri, Map<String, List<String>> requestHeaders) throws IOException {
             return Map.of();
