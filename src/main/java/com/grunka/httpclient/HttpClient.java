@@ -17,6 +17,9 @@ import java.net.URLConnection;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -29,109 +32,33 @@ public class HttpClient {
     public static final String FORM_URL_ENCODED = "application/x-www-form-urlencoded";
     public static final String APPLICATION_JSON = "application/json";
 
-    public static class Configuration {
-        public static final Configuration DEFAULT = new Configuration(5000, 10_000, null, APPLICATION_JSON, StandardCharsets.UTF_8, false);
-
-        public final long connectTimeout;
-        public final long readTimeout;
-        public final String accept;
-        public final String contentType;
-        public final Charset charset;
-        public final boolean disconnect;
-
-        public Configuration(long connectTimeout, long readTimeout, String accept, String contentType, Charset charset, boolean disconnect) {
-            this.connectTimeout = connectTimeout;
-            this.readTimeout = readTimeout;
-            this.accept = accept;
-            this.contentType = contentType;
-            this.charset = charset;
-            this.disconnect = disconnect;
-        }
-
-        public Configuration disconnect() {
-            if (disconnect) {
-                return this;
-            }
-            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, true);
-        }
-
-        public Configuration readTimeout(long readTimeout) {
-            if (readTimeout == this.readTimeout) {
-                return this;
-            }
-            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, disconnect);
-        }
-
-        public Configuration connectTimeout(long connectTimeout) {
-            if (connectTimeout == this.connectTimeout) {
-                return this;
-            }
-            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, disconnect);
-        }
-
-        public Configuration charset(Charset charset) {
-            if (Objects.equals(charset, this.charset)) {
-                return this;
-            }
-            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, disconnect);
-        }
-
-        public Configuration accept(String accept) {
-            if (Objects.equals(accept, this.accept)) {
-                return this;
-            }
-            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, disconnect);
-        }
-
-        public Configuration contentType(String contentType) {
-            Objects.requireNonNull(contentType, "Content-Type is not allowed to be null");
-            if (Objects.equals(contentType, this.contentType)) {
-                return this;
-            }
-            return new Configuration(connectTimeout, readTimeout, accept, contentType, charset, disconnect);
-        }
-    }
-
     private HttpClient() {
     }
 
-    public static CompletableFuture<HttpResponse> get(String path) {
-        return get(path, Configuration.DEFAULT);
+    public static CompletableFuture<HttpResponse> execute(HttpRequest request) {
+        switch (request.type) {
+            case GET:
+                return openConnection(request).thenCompose(connection -> readResponse(connection, request));
+            case POST:
+                return postContent(request);
+            default:
+                throw new IllegalArgumentException("Can only handle GET and POST");
+        }
     }
 
-    public static CompletableFuture<HttpResponse> getJson(String path) {
-        return get(path, Configuration.DEFAULT.accept(APPLICATION_JSON));
-    }
-
-    public static CompletableFuture<HttpResponse> get(String path, Configuration configuration) {
-        return openConnection(path, configuration).thenCompose(connection -> HttpClient.readResponse(connection, configuration));
-    }
-
-    public static CompletableFuture<HttpResponse> postJson(String path, String json) {
-        return postContent(path, json, Configuration.DEFAULT.contentType(APPLICATION_JSON).accept(APPLICATION_JSON));
-    }
-
-    public static CompletableFuture<HttpResponse> post(String path, Parameters parameters) {
-        return post(path, parameters, Configuration.DEFAULT);
-    }
-
-    public static CompletableFuture<HttpResponse> post(String path, Parameters parameters, Configuration configuration) {
-        return postContent(path, parameters.toString(), configuration.contentType(FORM_URL_ENCODED));
-    }
-
-    private static CompletableFuture<HttpResponse> postContent(String path, String content, Configuration configuration) {
-        byte[] contentBytes = content.getBytes(configuration.charset);
-        return openConnection(path, configuration).thenCompose(connection -> {
+    private static CompletableFuture<HttpResponse> postContent(HttpRequest request) {
+        byte[] contentBytes = request.postContent.getBytes(request.charset);
+        return openConnection(request).thenCompose(connection -> {
             try {
                 connection.setRequestMethod("POST");
             } catch (ProtocolException e) {
                 return CompletableFuture.failedFuture(new Error("POST method not supported", e));
             }
             connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", configuration.contentType + "; charset=" + configuration.charset.name());
+            connection.setRequestProperty("Content-Type", request.contentType + "; charset=" + request.charset.name());
             connection.setRequestProperty("Content-Length", String.valueOf(contentBytes.length));
             return writeRequest(connection::getOutputStream, new ByteArrayInputStream(contentBytes))
-                    .thenCompose(x -> readResponse(connection, configuration))
+                    .thenCompose(x -> readResponse(connection, request))
                     .<CompletableFuture<HttpResponse>>handle((r, e) -> {
                         if (r != null) {
                             return CompletableFuture.completedFuture(r);
@@ -140,7 +67,7 @@ public class HttpClient {
                         if (e.getClass() == ConnectException.class || e.getClass() == SocketTimeoutException.class) {
                             return CompletableFuture.failedFuture(e);
                         } else {
-                            return readResponse(connection, configuration);
+                            return readResponse(connection, request);
                         }
                     }).thenCompose(x -> x);
         });
@@ -164,8 +91,8 @@ public class HttpClient {
         return result;
     }
 
-    private static CompletableFuture<HttpResponse> readResponse(HttpURLConnection connection, Configuration configuration) {
-        return readAll(connection::getContentType, connection::getInputStream, configuration)
+    private static CompletableFuture<HttpResponse> readResponse(HttpURLConnection connection, HttpRequest request) {
+        return readAll(connection::getContentType, connection::getInputStream, request)
                 .thenApply(body -> new HttpResponse(200, body))
                 .<CompletableFuture<HttpResponse>>handle((response, e0) -> {
                     if (response != null) {
@@ -182,7 +109,7 @@ public class HttpClient {
                     } catch (IOException ioException) {
                         return CompletableFuture.failedFuture(ioException);
                     }
-                    return readAll(connection::getContentEncoding, connection::getErrorStream, configuration)
+                    return readAll(connection::getContentEncoding, connection::getErrorStream, request)
                             .thenApply(body -> new HttpResponse(responseCode, body))
                             .<CompletableFuture<HttpResponse>>handle((r, e1) -> {
                                 if (r != null) {
@@ -194,7 +121,7 @@ public class HttpClient {
                 })
                 .thenCompose(x -> x)
                 .whenComplete((r, t) -> {
-                    if (configuration.disconnect) {
+                    if (request.disconnect) {
                         connection.disconnect();
                     }
                 });
@@ -209,17 +136,21 @@ public class HttpClient {
     }
 
     public static void main(String[] args) {
-        HttpClient httpClient = new HttpClient(1000, 1000);
-        httpClient.get("https://www.google.com").thenAccept(response -> {
-            System.out.println("response.getBody() = " + response.getBody());
-        }).join();
+        Instant start = Instant.now();
+        List<CompletableFuture<String>> bodies = new ArrayList<>();
+        for (int i = 0; i < 1; i++) {
+            bodies.add(HttpClient.execute(HttpRequest.POST("http://www.example.com").json("{}").charset(StandardCharsets.ISO_8859_1).disconnect()).thenApply(HttpResponse::getBody));
+        }
+        bodies.forEach(CompletableFuture::join);
+        Duration duration = Duration.between(start, Instant.now());
+        System.out.println("duration.toMillis() = " + duration.toMillis());
     }
 
-    private static CompletableFuture<String> readAll(ContentTypeSupplier contentTypeSupplier, InputStreamSupplier inputStreamSupplier, Configuration configuration) {
+    private static CompletableFuture<String> readAll(ContentTypeSupplier contentTypeSupplier, InputStreamSupplier inputStreamSupplier, HttpRequest request) {
         CompletableFuture<String> result = new CompletableFuture<>();
         ForkJoinPool.commonPool().execute(() -> {
             String contentType = contentTypeSupplier.get();
-            Charset charset = parseCharsetFromContentType(contentType, configuration.charset);
+            Charset charset = parseCharsetFromContentType(contentType, request.charset);
             try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
                 try (InputStream inputStream = inputStreamSupplier.get()) {
                     inputStream.transferTo(outputStream);
@@ -253,23 +184,23 @@ public class HttpClient {
         return defaultCharset;
     }
 
-    private static CompletableFuture<HttpURLConnection> openConnection(String path, Configuration configuration) {
+    private static CompletableFuture<HttpURLConnection> openConnection(HttpRequest request) {
         URL url;
         try {
-            url = new URL(path);
+            url = new URL(request.url);
         } catch (MalformedURLException e) {
             return CompletableFuture.failedFuture(e);
         }
         return openConnection(url).thenApply(connection -> {
             connection.setRequestProperty("Connection", "Keep-Alive");
             connection.setRequestProperty("User-Agent", "com.grunka.httpclient/1.0");
-            if (configuration.accept != null) {
-                connection.setRequestProperty("Accept", configuration.accept);
+            if (request.accept != null) {
+                connection.setRequestProperty("Accept", request.accept);
             }
             connection.setUseCaches(false);
             connection.setInstanceFollowRedirects(true);
-            connection.setConnectTimeout((int) configuration.connectTimeout);
-            connection.setReadTimeout((int) configuration.readTimeout);
+            connection.setConnectTimeout((int) request.connectTimeout);
+            connection.setReadTimeout((int) request.readTimeout);
             return connection;
         });
     }
@@ -296,12 +227,12 @@ public class HttpClient {
         public static final NullCookieHandler INSTANCE = new NullCookieHandler();
 
         @Override
-        public Map<String, List<String>> get(URI uri, Map<String, List<String>> requestHeaders) throws IOException {
+        public Map<String, List<String>> get(URI uri, Map<String, List<String>> requestHeaders) {
             return Map.of();
         }
 
         @Override
-        public void put(URI uri, Map<String, List<String>> responseHeaders) throws IOException {
+        public void put(URI uri, Map<String, List<String>> responseHeaders) {
 
         }
     }
