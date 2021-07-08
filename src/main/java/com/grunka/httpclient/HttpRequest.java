@@ -12,6 +12,7 @@ public class HttpRequest {
 
     final HttpRequestType type;
     final String url;
+    final String userAgent;
     final long connectTimeout;
     final long readTimeout;
     final String accept;
@@ -20,9 +21,10 @@ public class HttpRequest {
     final boolean disconnect;
     final String postContent;
 
-    private HttpRequest(HttpRequestType type, String url, long connectTimeout, long readTimeout, String accept, String contentType, Charset charset, boolean disconnect, String postContent) {
+    private HttpRequest(HttpRequestType type, String url, String userAgent, long connectTimeout, long readTimeout, String accept, String contentType, Charset charset, boolean disconnect, String postContent) {
         this.type = type;
         this.url = url;
+        this.userAgent = userAgent;
         this.connectTimeout = connectTimeout;
         this.readTimeout = readTimeout;
         this.accept = accept;
@@ -33,7 +35,7 @@ public class HttpRequest {
     }
 
     private HttpRequest(HttpRequestType type, String url) {
-        this(type, url, 5000, 10_000, HttpClient.ANY, HttpClient.APPLICATION_JSON, StandardCharsets.UTF_8, false, null);
+        this(type, url, "com.grunka.httpclient/1.0", 5000, 10_000, HttpClient.ANY, HttpClient.APPLICATION_JSON, StandardCharsets.UTF_8, false, null);
     }
 
     public static HttpRequest GET(String url) {
@@ -51,7 +53,7 @@ public class HttpRequest {
         if (Objects.equals(json, this.postContent)) {
             return this;
         }
-        return new HttpRequest(type, url, connectTimeout, readTimeout, HttpClient.APPLICATION_JSON, HttpClient.APPLICATION_JSON, charset, disconnect, json);
+        return new HttpRequest(type, url, userAgent, connectTimeout, readTimeout, HttpClient.APPLICATION_JSON, HttpClient.APPLICATION_JSON, charset, disconnect, json);
     }
 
     public HttpRequest form(Parameters parameters) {
@@ -62,7 +64,7 @@ public class HttpRequest {
         if (Objects.equals(form, this.postContent)) {
             return this;
         }
-        return new HttpRequest(type, url, connectTimeout, readTimeout, accept, HttpClient.FORM_URL_ENCODED, charset, disconnect, form);
+        return new HttpRequest(type, url, userAgent, connectTimeout, readTimeout, accept, HttpClient.FORM_URL_ENCODED, charset, disconnect, form);
     }
 
     public HttpRequest content(String content) {
@@ -72,21 +74,21 @@ public class HttpRequest {
         if (Objects.equals(content, this.postContent)) {
             return this;
         }
-        return new HttpRequest(type, url, connectTimeout, readTimeout, accept, contentType, charset, disconnect, content);
+        return new HttpRequest(type, url, userAgent, connectTimeout, readTimeout, accept, contentType, charset, disconnect, content);
     }
 
     public HttpRequest readTimeout(long readTimeout) {
         if (readTimeout == this.readTimeout) {
             return this;
         }
-        return new HttpRequest(type, url, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
+        return new HttpRequest(type, url, userAgent, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
     }
 
     public HttpRequest connectTimeout(long connectTimeout) {
         if (connectTimeout == this.connectTimeout) {
             return this;
         }
-        return new HttpRequest(type, url, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
+        return new HttpRequest(type, url, userAgent, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
     }
 
     public HttpRequest charset(Charset charset) {
@@ -94,14 +96,14 @@ public class HttpRequest {
         if (Objects.equals(charset, this.charset)) {
             return this;
         }
-        return new HttpRequest(type, url, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
+        return new HttpRequest(type, url, userAgent, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
     }
 
     public HttpRequest accept(String accept) {
         if (Objects.equals(accept, this.accept)) {
             return this;
         }
-        return new HttpRequest(type, url, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
+        return new HttpRequest(type, url, userAgent, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
     }
 
     public HttpRequest contentType(String contentType) {
@@ -109,13 +111,21 @@ public class HttpRequest {
         if (Objects.equals(contentType, this.contentType)) {
             return this;
         }
-        return new HttpRequest(type, url, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
+        return new HttpRequest(type, url, userAgent, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
+    }
+
+    public HttpRequest userAgent(String userAgent) {
+        Objects.requireNonNull(contentType, "User agent is not allowed to be null");
+        if (Objects.equals(userAgent, this.userAgent)) {
+            return this;
+        }
+        return new HttpRequest(type, url, userAgent, connectTimeout, readTimeout, accept, contentType, charset, disconnect, postContent);
     }
 
     public HttpRequest disconnect() {
         if (disconnect) {
             return this;
         }
-        return new HttpRequest(type, url, connectTimeout, readTimeout, accept, contentType, charset, true, postContent);
+        return new HttpRequest(type, url, userAgent, connectTimeout, readTimeout, accept, contentType, charset, true, postContent);
     }
 }

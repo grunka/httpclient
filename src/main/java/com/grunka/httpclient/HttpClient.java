@@ -197,8 +197,7 @@ public class HttpClient {
             return CompletableFuture.failedFuture(e);
         }
         return openConnection(url).thenApply(connection -> {
-            connection.setRequestProperty("Connection", "Keep-Alive");
-            connection.setRequestProperty("User-Agent", "com.grunka.httpclient/1.0");
+            connection.setRequestProperty("User-Agent", request.userAgent);
             connection.setRequestProperty("Accept", request.accept);
             connection.setUseCaches(false);
             connection.setInstanceFollowRedirects(true);
