@@ -19,10 +19,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
+import java.util.concurrent.CompletionException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class HttpClientTest {
     private static ServerSocket serverSocket;
@@ -55,6 +57,10 @@ public class HttpClientTest {
                         break;
                     }
                     try (Socket socket = serverSocket.accept()) {
+                        if ("on accept".equals(response.get("fail"))) {
+                            socket.close();
+                            continue;
+                        }
                         try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
                             try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()))) {
                                 String in;
@@ -80,6 +86,10 @@ public class HttpClientTest {
                                             request.put("path", in.split(" ")[1]);
                                         }
                                     }
+                                }
+                                if ("after request".equals(response.get("fail"))) {
+                                    socket.close();
+                                    continue;
                                 }
                                 writer.println("HTTP/1.1 " + response.get("code"));
                                 writer.println("Content-Length: " + response.get("content").length());
@@ -113,6 +123,7 @@ public class HttpClientTest {
         response.clear();
         response.put("code", "200 OK");
         response.put("content", "");
+        response.put("fail", null);
     }
 
     @Test
@@ -136,5 +147,26 @@ public class HttpClientTest {
         assertEquals("/hello", request.get("path"));
     }
 
+    @Test
+    public void shouldHandleFailureOnConnect() {
+        response.put("fail", "on accept");
+        try {
+            HttpClient.execute(HttpRequest.GET("http://localhost:" + serverPort + "/hello")).join();
+            fail();
+        } catch (CompletionException e) {
+            assertTrue(e.getCause() instanceof SocketException);
+        }
+    }
+
+    @Test
+    public void shouldHandleFailureAfterRequest() {
+        response.put("fail", "after request");
+        try {
+            HttpClient.execute(HttpRequest.GET("http://localhost:" + serverPort + "/hello")).join();
+            fail();
+        } catch (CompletionException e) {
+            assertTrue(e.getCause() instanceof SocketException);
+        }
+    }
     //TODO test errors, strange content, and timeouts of different kinds
 }
