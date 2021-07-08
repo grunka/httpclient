@@ -5,8 +5,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -24,12 +22,11 @@ import java.util.Random;
 import java.util.TreeMap;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 @Ignore
 public class HttpClientTest {
-    private static final Logger LOG = LoggerFactory.getLogger(HttpClientTest.class);
-
     private static ServerSocket serverSocket;
     private static int serverPort;
     private static Thread serverThread;
@@ -44,6 +41,7 @@ public class HttpClientTest {
         while (true) {
             try {
                 serverPort = random.nextInt(1024) + 1024;
+                System.out.println("Trying port " + serverPort);
                 serverSocket = new ServerSocket(serverPort);
                 break;
             } catch (IOException e) {
@@ -94,9 +92,10 @@ public class HttpClientTest {
                     }
                 } catch (IOException e) {
                     if (e instanceof SocketException && e.getMessage().contains("closed")) {
-                        LOG.info("Server socket closed");
+                        System.out.println("Server socket closed");
                     } else {
-                        LOG.error("Failed to read request", e);
+                        System.err.println("Failed to read request");
+                        e.printStackTrace(System.err);
                     }
                 }
             }
@@ -124,6 +123,17 @@ public class HttpClientTest {
         HttpResponse response = HttpClient.execute(HttpRequest.GET("http://localhost:" + serverPort + "/hello")).join();
         assertTrue(response.isOk());
         assertEquals("Hello World!", response.getBody());
+        assertTrue(headers.get("user-agent").contains("com.grunka.httpclient/1.0"));
+        assertEquals("/hello", request.get("path"));
+    }
+
+    @Test
+    public void shouldDoSimpleGetAndHandleError() {
+        response.put("code", "500 ERROR");
+        response.put("content", "Goodbye");
+        HttpResponse response = HttpClient.execute(HttpRequest.GET("http://localhost:" + serverPort + "/hello")).join();
+        assertFalse(response.isOk());
+        assertEquals("Goodbye", response.getBody());
         assertTrue(headers.get("user-agent").contains("com.grunka.httpclient/1.0"));
         assertEquals("/hello", request.get("path"));
     }
