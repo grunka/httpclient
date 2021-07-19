@@ -69,7 +69,7 @@ public class HttpRequest {
 
     public HttpRequest content(String content) {
         if (type != HttpRequestType.POST) {
-            throw new IllegalArgumentException("Cannot post form in a non POST request");
+            throw new IllegalArgumentException("Cannot post content in a non POST request");
         }
         if (Objects.equals(content, this.postContent)) {
             return this;
